@@ -1,0 +1,14 @@
+---
+version: "3.6"
+services:
+  service:
+    image: cr-project
+    build:
+      context: .
+      args:
+        RUNTIME_ENV: development
+      dockerfile: ./docker/Dockerfile
+    env_file: ./config/.env
+    ports:
+      - "8080:8080"
+    command: uvicorn service.main:app --host=0.0.0.0 --port 8080 --reload

@@ -1,0 +1,51 @@
+name: Build and Deploy to Google Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout the code
+      uses: actions/checkout@v3
+
+    - name: Set up Google Cloud credentials
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+    - name: Configure Docker for Google Cloud
+      run: gcloud auth configure-docker ${{ secrets.GCP_REGISTRY_HOST }}
+
+    - name: Build Docker image
+      env:
+        REPO_HOST: "${{ secrets.GCP_REGISTRY_HOST }}"
+        IMAGE_NAME: "${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_REGISTRY_REPO }}/${{ secrets.GCP_SERVICE_NAME }}"
+        IMAGE_TAG: "${{ github.sha }}"
+      run: |
+        docker build -f docker/Dockerfile -t $REPO_HOST/$IMAGE_NAME:$IMAGE_TAG -t $REPO_HOST/$IMAGE_NAME:latest .
+
+    - name: Push Docker image to Google Container Registry
+      env:
+        REPO_HOST: "${{ secrets.GCP_REGISTRY_HOST }}"
+        IMAGE_NAME: "${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_REGISTRY_REPO }}/${{ secrets.GCP_SERVICE_NAME }}"
+        IMAGE_TAG: "${{ github.sha }}"
+      run: |
+        docker push $REPO_HOST/$IMAGE_NAME:$IMAGE_TAG &&
+        docker push $REPO_HOST/$IMAGE_NAME:latest
+
+    - name: Deploy to Cloud Run
+      uses: google-github-actions/deploy-cloudrun@v2
+      with:
+        service: ${{ secrets.GCP_SERVICE_NAME }}
+        image: ${{ secrets.GCP_REGISTRY_HOST }}/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_REGISTRY_REPO }}/${{ secrets.GCP_SERVICE_NAME }}:${{ github.sha }}
+        region: ${{ secrets.GCP_REGION }}
